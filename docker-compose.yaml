@@ -1,0 +1,19 @@
+ 
+services:
+  hermes:
+    image: ${IMAGE_NAME}:latest
+    container_name: ${CONTAINER_NAME}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    shm_size: "1gb"
+    volumes:
+      - ~/apps/data/.hermes_test:/opt/data
+ 
+    environment:
+ 
+      - TZ=${TZ}
+      - HERMES_UID=${HERMES_UID}
+      - HERMES_GID=${HERMES_GID}
+
+ 
