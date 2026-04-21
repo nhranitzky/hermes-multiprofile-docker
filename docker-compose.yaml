@@ -16,4 +16,6 @@ services:
       - HERMES_UID=${HERMES_UID}
       - HERMES_GID=${HERMES_GID}
 
- 
+    # ports:
+      # - 9642:8642   # map ports for api_server
+      #     profile port map

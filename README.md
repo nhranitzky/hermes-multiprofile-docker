@@ -8,7 +8,7 @@ A Docker packaging layer for [Hermes Agent](https://nousresearch.com) that adds 
 
 The base `nousresearch/hermes-agent` image runs a single Hermes gateway. This wrapper adds:
 
-- **UID/GID remapping** so the data volume is writable by the host user without permission errors
+- **UID/GID remapping** so the data volume and install directory are writable by the host user without permission errors
 - **Supervisor process management** so the main instance and every profile instance are kept alive automatically
 - **Profile auto-discovery** — drop a directory under `/opt/data/profiles/` and the container registers it as its own supervised process on the next start
 
@@ -20,13 +20,13 @@ The base `nousresearch/hermes-agent` image runs a single Hermes gateway. This wr
 
 When the container starts, `entrypoint.sh` runs as root and performs these steps in order:
 
-1. **`remap-ownership.sh`** — If the `HERMES_UID` / `HERMES_GID` environment variables are set, the `hermes` user/group inside the container is remapped to match those IDs. The data volume (`/opt/data`) is then `chown`-ed to `hermes`. In rootless Podman environments where `chown` would fail, the error is silently ignored.
+1. **`remap-ownership.sh`** — If `HERMES_UID` / `HERMES_GID` are set and differ from the current `hermes` user/group IDs, the user and group are remapped with `usermod`/`groupmod`, and both `HERMES_HOME` and `INSTALL_DIR` are `chown`-ed to `hermes`. In rootless Podman environments where `chown` would fail, the error is silently ignored.
 
 2. **Supervisor config directory** — `/etc/supervisor/conf.d/` is created.
 
 3. **Main instance config** — A supervisor program definition `hermes-main.conf` is generated, pointing `start.sh gateway run` at `HERMES_HOME=/opt/data`.
 
-4. **Profile instance configs** — Every subdirectory found under `/opt/data/profiles/` gets its own `hermes-<name>.conf` program definition. Each profile gets its own `HERMES_HOME`.
+4. **Profile instance configs** — Every subdirectory found under `/opt/data/profiles/` gets its own `hermes-<name>.conf` program definition. Each profile gets its own `HERMES_HOME`.  
 
 5. **`supervisord` starts** — `exec supervisord` replaces the shell process. From this point, supervisor owns all child processes.
 
@@ -50,7 +50,11 @@ Supervisor runs in the foreground (`nodaemon=true`) so Docker captures all log o
 
 ### Configuration (`.env`)
 
-All image, container, and runtime variables are defined in `.env` at the project root:
+All image, container, and runtime variables are defined in `.env` at the project root. Copy `.env.example` to get started:
+
+```bash
+cp .env.example .env
+```
 
 ```dotenv
 IMAGE_NAME=hermes-multiagent
@@ -93,6 +97,8 @@ make up
 # equivalent to:
 docker compose up -d
 ```
+
+If you change the user (`HERMES_UID` and `HERMES_GID`), the first startup takes longer.
 
 The compose file mounts `~/apps/data/.hermes_test` as `/opt/data`. On first start, Hermes populates the data folder and starts the main gateway process.
 
@@ -157,9 +163,30 @@ Process names follow the pattern `hermes-main` for the default instance and `her
 
 ---
 
+## Enable API Server
+
+The API server is configured per instance via the Hermes `.env` file inside each instance's data directory (e.g. `~/apps/data/.hermes_test/.env` for the main instance, `~/apps/data/.hermes_test/profiles/writer/.env` for a profile).
+
+Add the following to the relevant `.env`:
+
+```dotenv
+API_SERVER_ENABLED=true
+API_SERVER_KEY=<your-key>
+API_SERVER_HOST=0.0.0.0
+API_SERVER_PORT=<internal_port>
+```
+
+Each instance must use a unique port. Add a corresponding port mapping to `docker-compose.yaml`:
+
+```yaml
+ports:
+  - <external_port>:<internal_port>
+```
+
+---
+
 ## Limitations
 
-- API server: not tested; profile support is likely absent
 - Hermes WebUI does not know about profiles
 - Not tested with different messaging platforms
 

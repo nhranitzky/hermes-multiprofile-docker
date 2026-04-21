@@ -1,10 +1,10 @@
 #!/bin/bash
-# Wird von supervisord pro Instanz aufgerufen: Umgebung aufsetzen, hermes starten.
+# Called by supervisord for each instance: set up environment, start hermes.
 set -e
 
 INSTALL_DIR="${INSTALL_DIR:-/opt/hermes}"
 
-# Handle optionales -p PROFILE Flag (Profil-Instanz)
+# Handle optional -p PROFILE flag (profile instance)
 HERMES_PROFILE=""
 if [ "$1" = "-p" ]; then
     HERMES_PROFILE="$2"
