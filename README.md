@@ -2,6 +2,7 @@
 
 A Docker packaging layer for [Hermes Agent](https://nousresearch.com) that adds multi-agent support via supervisor. A single container can run one main Hermes instance plus any number of named profile instances in parallel, all sharing the same image.
 
+![alt text](images/hermes_multiprofile.png "Architecture")
 ---
 
 ## Purpose
