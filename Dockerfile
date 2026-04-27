@@ -1,7 +1,8 @@
 
 FROM nousresearch/hermes-agent:latest
 
-RUN apt-get update && apt-get install -y supervisor
+USER root
+RUN apt-get update && apt-get install -y vim iproute2 supervisor
 
 COPY startup/ /opt/hermes-start/startup/
 

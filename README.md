@@ -2,16 +2,68 @@
 
 A Docker packaging layer for [Hermes Agent](https://nousresearch.com) that adds multi-agent support via supervisor. A single container can run one main Hermes instance plus any number of named profile instances in parallel, all sharing the same image.
 
-![alt text](images/hermes_multiprofile.png "Architecture")
+
 ---
 
+## Hermes Docker: Multi-Profile Architecture Options
+
+The base Hermes Agent Docker image does not support multiple profiles within a single container natively. For additional profiles, only `chat` is available — cron jobs and messaging integrations are not supported.
+
+Two approaches exist for running a multi-profile Hermes environment:
+
+---
+
+## Approach 1: Separate Docker Instance per Profile
+
+Each profile runs in its own dedicated Docker container. A shared directory can optionally be mounted across instances.
+
+### Advantages
+
+- **Full isolation** — each instance has its own processes, database, memory, and cron jobs
+- **Simple deployment** — standard `docker run` per profile, no internal complexity
+- **Fault containment** — a crash or error in one instance does not affect others
+- **Per-profile resource limits** — easy to configure `container_cpu` and `container_memory` independently
+
+
+### Disadvantages
+
+- **Higher resource consumption** — each instance runs its own Python process, etc.
+- **Higher administrative effort** - if you need many profiles
+
+---
+
+## Approach 2: Single Docker Container with supervisord (Multiple Gateway Processes)
+
+A single Docker container runs multiple `hermes gateway` processes managed by `supervisord`. This approach is   straightforward to implement — no changes to the Hermes codebase are required, only the Docker startup scripts need to be changed.
+
+### Advantages
+
+- **Already working** — supervisord makes this easy to implement without modifying Hermes internals
+- **Single container to manage** — one image, one update cycle, one deployment unit
+- **Process supervision included** — supervisord handles automatic restarts  
+- **Shared Python environment** — lower resource overhead compared to Approach 1
+ 
+
+### Disadvantages
+
+- **Weaker isolation** — a container crash or restart affects all profiles simultaneously
+- **No per-profile resource limits** — CPU and memory limits apply to the entire container, not individual profiles
+ 
+---
+ 
+
+
 ## Purpose
+
+This project implements the **Approach 2**.
 
 The base `nousresearch/hermes-agent` image runs a single Hermes gateway. This wrapper adds:
 
 - **UID/GID remapping** so the data volume and install directory are writable by the host user without permission errors
 - **Supervisor process management** so the main instance and every profile instance are kept alive automatically
-- **Profile auto-discovery** — drop a directory under `/opt/data/profiles/` and the container registers it as its own supervised process on the next start
+- **Profile auto-discovery** — scans subdirectories under `/opt/data/profiles/` and registers each as its own supervised process on the next container start.
+
+![alt text](images/hermes_multiprofile.png "Architecture")
 
 ---
 
@@ -27,7 +79,7 @@ When the container starts, `entrypoint.sh` runs as root and performs these steps
 
 3. **Main instance config** — A supervisor program definition `hermes-main.conf` is generated, pointing `start.sh gateway run` at `HERMES_HOME=/opt/data`.
 
-4. **Profile instance configs** — Every subdirectory found under `/opt/data/profiles/` gets its own `hermes-<name>.conf` program definition. Each profile gets its own `HERMES_HOME`.  
+4. **Profile instance configs** — Every subdirectory found under `/opt/data/profiles/` gets its own `hermes-profile-<name>.conf` program definition. Each profile gets its own `HERMES_HOME`.  
 
 5. **`supervisord` starts** — `exec supervisord` replaces the shell process. From this point, supervisor owns all child processes.
 
@@ -39,7 +91,7 @@ Supervisor calls `start.sh` for each program. It:
 - Creates the required directory layout inside `HERMES_HOME` (`cron`, `sessions`, `logs`, `hooks`, `memories`, `skills`, `skins`, `plans`, `workspace`, `home`)
 - Seeds missing config files (`.env`, `config.yaml`, `SOUL.md`) from bundled examples
 - Syncs bundled skills via `skills_sync.py`
-- Runs `hermes gateway run` (optionally with `-p <profile>` for profile instances)
+- Runs `hermes gateway run` for the main instance, or `hermes -p <profile> gateway run` for profile instances
 
 ### Supervisor (`supervisord.conf`)
 
@@ -199,6 +251,8 @@ ports:
 |---|---|
 | `make up` | Start all containers |
 | `make down` | Stop and remove containers |
+| `make start` | Start stopped containers |
+| `make stop` | Stop running containers (without removing them) |
 | `make restart` | Restart containers |
 | `make logs` | Stream logs |
 | `make status` | Show container status |
